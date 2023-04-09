@@ -1,103 +1,76 @@
-import * as TokenType from './tokentype.js'
-
-const token_name = value=>Object.keys(TokenType).find(e=>TokenType[e] === value)
-
-export default class Node extends EventTarget{
-	/**
-	 * The character to match either by RegExp or character
-	 * @type {string|RegExp}
-	 */
+export default class Node{
+	/**@type {RegExp|string} */
 	match
-
-	/**
-	 * Name of the node
-	 * @type {string}
-	 */
-	name
-
-	/**
-	 * The value for the name
-	 */
+	
+	/**@type {number} */
 	value
 
-	/**
-	 * The precceding node before the current node 
-	 * @type {Set<Node>} 
-	 */
-	prev = new Set
+	/**@type {string} */
+	name
 
-	/**
-	 * The next node after the current node
-	 * @type {Set<Node}
-	 */
-	next = new Set
+	/**@type {Node[]} */
+	previous_node = []
 
-	get type(){ return this.match.constructor.name === 'String' ? 'CHAR' : 'WORD'}
+	/**@type {Node[]} */
+	next_node = []
 
-	static FINISHED(data){ return new CustomEvent('finished', {detail : data})}
+	constructor(match, value, name){
+		this.value = value
+		this.match = match
+		this.name = name
+	}
 
-	static MATCH(data){ return new CustomEvent('match', {detail : data}) }
+	validate(str){
+		if(typeof this.match === 'string')
+			return this.match === str
+		else
+			return this.match.test(str)
+	}
 
 	/**
 	 * 
-	 * @param {string|RegExp} match 
-	 * @param {number} int_value 
-	 */
-	constructor(match, int_value){
-		super()
-		this.value = int_value
-		this.match = match
-		this.name = token_name(int_value)
-	}
-
-	/**
-	 * Check if node is the correct match
-	 * @param {Node|number} node
-	 * @returns {boolean}
-	 */
-	is(node){
-		if(typeof node === 'number')
-			return this.value === node
-		else
-			return this === node
-	}
-
-	/**
-	 * Find if value match the node
-	 * @param {string} value
-	 * @return {boolean}
-	 */
-	match(value){
-		if(typeof this.match === 'string')
-			return value === this.match
-		else if(this.match instanceof RegExp)
-			return this.match.test(value)
-	}
-
-	/**
-	 * Set the next node after the current
 	 * @param  {...Node} nodes 
 	 */
 	set(...nodes){
 		nodes.forEach(node=>{
-			this.next.add(node)
-			node.prev.add(this)
+			this.next_node.push(node)
+			node.previous_node.push(this)
 		})
-
-		return this
 	}
 
-	/**
-	 * Find if node is contained in prev or next
-	 * @param {'prev'|'next'} dir 
-	 * @param {Node} node 
-	 * @returns {boolean}
-	 */
-	contains(dir, node){
-		if(dir !== 'prev' && dir !== 'next') 
-			throw new Error('dir requires value to be "next" or "prev"')
+	prevNode(node){
+		return this.previous_node.indexOf(node) > -1
+	}
 
-		return this[dir].has(node)
+	nextNode(node){
+		return this.next_node.indexOf(node) > -1
 	}
 }
 
+export const WORD = new Node(/[\w\d*~.]/, 1 << 0, 'WORD')
+
+export const NEW_LINE = new Node('\n', 1 << 1, 'NEW_LINE')
+
+export const OPEN_TAG = new Node('[', 1 << 2, 'OPEN_TAG')
+
+export const END_TAG = new Node(':', 1 << 3, 'END_TAG')
+
+export const TAG_NAME = new Node(/\w+/, 1 << 4 | WORD.value, 'TAG_NAME')
+
+export const KEY = new Node(/\w+/, 1 << 5 | WORD.value, 'KEY')
+
+export const EQUALS = new Node('=', 1 << 6, 'EQUALS')
+
+export const VALUES = new Node(/\w+/, 1 << 7 | WORD.value, 'VALUES')
+
+export const CLOSE_TAG = new Node(']', 1 << 8, 'CLOSE_TAG')
+
+WORD.set(WORD, NEW_LINE, OPEN_TAG)
+NEW_LINE.set(NEW_LINE, WORD, OPEN_TAG)
+OPEN_TAG.set(END_TAG, TAG_NAME)
+END_TAG.set(TAG_NAME)
+TAG_NAME.set(CLOSE_TAG, KEY)
+KEY.set(KEY, CLOSE_TAG, EQUALS)
+EQUALS.set(VALUES)
+VALUES.set(KEY, CLOSE_TAG)
+CLOSE_TAG.set(NEW_LINE, WORD, OPEN_TAG)
